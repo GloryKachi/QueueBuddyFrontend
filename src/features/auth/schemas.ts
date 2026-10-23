@@ -42,6 +42,7 @@ export const patientSchema = z.object({
 export const doctorSchema = z.object({
     fullName,
     email,
+    phone,
     password,
     specialization: z.string().trim().min(2, "Enter your specialization"),
     licenseNumber: z.string().trim().min(2, "Enter your licence number"),
@@ -49,6 +50,13 @@ export const doctorSchema = z.object({
     acceptedTerms: terms,
 });
 
+export const loginSchema = z.object({
+    email,
+    password: z.string().min(1, "Enter your password"),
+});
+
+export type LoginInput = z.input<typeof loginSchema>;
+export type LoginValues = z.output<typeof loginSchema>;
 export type ClinicSignupInput = z.input<typeof clinicSignupSchema>;
 export type ClinicSignupValues = z.output<typeof clinicSignupSchema>;
 export type PatientInput = z.input<typeof patientSchema>;

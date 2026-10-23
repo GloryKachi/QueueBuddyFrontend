@@ -5,6 +5,7 @@ export type UserResponse = {
     phone: string | null;
     role: "PATIENT" | "DOCTOR" | "ADMIN";
     status: "PENDING_VERIFICATION" | "PENDING_APPROVAL" | "ACTIVE" | "SUSPENDED";
+    message?: string | null;
 };
 
 export type ClinicSummary = {
@@ -18,5 +19,13 @@ export type ClinicSummary = {
 export type SignupResponse = {
     clinic: ClinicSummary | null;
     user: UserResponse;
-    message: string;
 };
+
+export type LoginResponse = {
+    token: string;
+    expiresInSeconds: number;
+    user: UserResponse;
+    clinic: ClinicSummary;
+};
+
+export type MeResponse = { user: UserResponse; clinic: ClinicSummary };

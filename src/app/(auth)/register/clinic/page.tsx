@@ -1,11 +1,12 @@
 import { AuthCard } from "@/components/shared/AuthCard";
-import { ClinicShowcase } from "@/features/auth/components/ClinicShowcase";
+import { AuthShowcase } from "@/features/auth/components/AuthShowcase";
 import { ClinicSignupForm } from "@/features/auth/components/ClinicSignupForm";
+import { clinicShowcase } from "@/features/auth/showcases";
 
 export default function ClinicRegisterPage() {
-  return (
-      <AuthCard aside={<ClinicShowcase />} imageSrc="/auth-clinic.svg">
-        <ClinicSignupForm />
-      </AuthCard>
-  );
+    return (
+        <AuthCard aside={<AuthShowcase {...clinicShowcase} />} imageSrc="/auth-clinic.svg">
+            <ClinicSignupForm />
+        </AuthCard>
+    );
 }

@@ -68,7 +68,8 @@ export function VerifyEmailView() {
         );
     }
 
-    const { clinic, user, message } = state.data;
+    const { clinic, user } = state.data;
+    const message = user.message;
 
     // Clinic admin: "Your clinic is ready!"
     if (clinic && user.role === "ADMIN") {
