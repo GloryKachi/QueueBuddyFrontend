@@ -4,10 +4,21 @@ import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "./SessionProvider";
 
-export function RequireRole({ role, children }: { role: "ADMIN" | "DOCTOR" | "PATIENT"; children: ReactNode }) {
+type Role = "ADMIN" | "DOCTOR" | "PATIENT";
+
+export function RequireRole({
+                                role,
+                                roles,
+                                children,
+                            }: {
+    role?: Role;
+    roles?: Role[];
+    children: ReactNode;
+}) {
     const { me } = useSession();
     const router = useRouter();
-    const allowed = me.user.role === role;
+    const allowedRoles = roles ?? (role ? [role] : []);
+    const allowed = allowedRoles.includes(me.user.role);
 
     useEffect(() => {
         if (!allowed) router.replace("/dashboard");

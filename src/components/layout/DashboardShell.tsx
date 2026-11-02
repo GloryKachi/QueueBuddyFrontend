@@ -16,11 +16,14 @@ const roleLabel: Record<Role, string> = { ADMIN: "Clinic admin", DOCTOR: "Doctor
 function navFor(role: Role): NavItem[] {
     if (role === "ADMIN") {
         return [
+            { label: "Queue", href: "/queue", icon: ClipboardList },
             { label: "Doctors", href: "/admin/doctors", icon: Stethoscope },
-            { label: "Queue", icon: ClipboardList, soon: true },
         ];
     }
-    return [{ label: "My queue", icon: ClipboardList, soon: true }];
+    if (role === "DOCTOR") {
+        return [{ label: "Queue", href: "/queue", icon: ClipboardList }];
+    }
+    return [{ label: "My queue", href: "/my-queue", icon: ClipboardList }];
 }
 
 function NavLink({ item, pathname, compact }: { item: NavItem; pathname: string; compact?: boolean }) {

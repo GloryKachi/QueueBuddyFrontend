@@ -8,6 +8,7 @@ const tones = {
     warning: "bg-warning/15 text-[#B26B00]",
     danger: "bg-danger/10 text-danger",
     neutral: "border border-mist text-slate",
+    late: "border border-dashed border-warning bg-warning/10 text-[#B26B00]",
 };
 
 export type PillTone = keyof typeof tones;
