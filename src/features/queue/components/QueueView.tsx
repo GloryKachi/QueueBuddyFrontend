@@ -173,7 +173,7 @@ export function QueueView() {
             <RejectDialog
                 item={declining}
                 onClose={() => setDeclining(null)}
-                onSubmit={(item: { id: number; patientName: never; }, reason: string) =>
+                onSubmit={(item, reason) =>
                     run(() => rejectRequest(token, item.id, reason), `Declined ${item.patientName}`)
                 }
             />
