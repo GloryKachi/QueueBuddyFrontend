@@ -1,207 +1,239 @@
 "use client";
 
 import { useState } from "react";
-import { Hourglass, Loader2, PartyPopper, WifiOff } from "lucide-react";
+import { Loader2, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
-import { AlertBanner } from "@/components/shared/AlertBanner";
-import { StatusPill } from "@/components/shared/StatusPill";
-import { SubmitButton } from "@/components/shared/SubmitButton";
-import { gradientButton } from "@/components/shared/styles";
-import { Button } from "@/components/ui/button";
 import { useSession } from "@/features/auth/components/SessionProvider";
-import { cn } from "@/lib/utils";
-import { timeAgo } from "@/lib/time";
-import { ApiError } from "@/types/api";
-import { cancelMyPlace, requestToJoin } from "../api";
-import { useMyQueue } from "../hooks/useMyQueue";
-import type { MyQueue, VisitType } from "../types";
-import { VisitTypePicker } from "./VisitTypePicker";
+import { doctorLabel } from "../doctor";
+import { usePoll } from "../hooks/usePoll";
+import { cancelMyPlace, getMyQueue, requestToJoin } from "../queueApi";
+import type { MyQueue } from "../types";
+import { DoctorPicker } from "./DoctorPicker";
+
+const WA_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER;
+const WA_CODE = process.env.NEXT_PUBLIC_WHATSAPP_JOIN_CODE;
+const CLOSED = ["REJECTED", "CANCELLED", "SKIPPED", "DONE"];
+const CARD = "rounded-2xl border border-mist bg-white p-5";
+const GRADIENT = "bg-linear-to-r from-[#4FB6FF] to-[#0B5CAB] text-white";
 
 function greeting() {
     const h = new Date().getHours();
     return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }
 
-function BigCard({ label, children, foot }: { label: string; children: React.ReactNode; foot?: React.ReactNode }) {
-    return (
-        <div className="rounded-2xl border border-mist bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate">{label}</p>
-            <div className="mt-3">{children}</div>
-            {foot && <div className="mt-3 text-sm text-slate">{foot}</div>}
-        </div>
-    );
+function relTime(iso: string) {
+    const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins} min ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} h ago`;
+    return new Date(iso).toLocaleDateString("en-NG");
 }
 
 export function MyQueueView() {
-    const { token, me } = useSession();
-    const { data, setData, error, offline } = useMyQueue(token);
-    const [visitType, setVisitType] = useState<VisitType>("CHECKUP");
+    const { token } = useSession();
+    const { data, setData, error, offline } = usePoll<MyQueue>(() => getMyQueue(token));
+    const [doctorId, setDoctorId] = useState<number | null>(null);
     const [busy, setBusy] = useState(false);
 
-    async function run(action: () => Promise<MyQueue>, success?: string) {
+    async function act(action: () => Promise<MyQueue>, success: string) {
         setBusy(true);
         try {
             setData(await action());
-            if (success) toast.success(success);
+            toast.success(success);
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+            toast.error(err instanceof Error ? err.message : "Something went wrong. Please try again.");
         } finally {
             setBusy(false);
         }
     }
 
-    if (error && !data) return <p className="rounded-2xl bg-danger/10 p-4 text-sm text-danger">{error}</p>;
-    if (!data) return <Loader2 className="mx-auto mt-24 h-8 w-8 animate-spin text-brand" />;
+    if (error && !data) {
+        return <p className="rounded-2xl bg-danger/10 p-4 text-sm text-danger">{error}</p>;
+    }
+    if (!data) {
+        return <Loader2 className="mx-auto mt-24 h-8 w-8 animate-spin text-brand" />;
+    }
 
     const entry = data.entry;
-    const active = !!entry && ["PENDING", "WAITING", "SERVING"].includes(entry.status);
-    const canCancel = !!entry && (entry.status === "PENDING" || entry.status === "WAITING");
-    const firstName = me.user.fullName.split(" ")[0];
+    const canJoin = !entry || CLOSED.includes(entry.status);
+    const firstName = data.patientName.split(" ")[0] || "there";
+    const lock = busy || offline;
+    const waLink =
+        WA_NUMBER && WA_CODE
+            ? `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`join ${WA_CODE}`)}`
+            : null;
 
     return (
-        <div className="mx-auto max-w-4xl space-y-6">
-            {offline && (
-                <AlertBanner variant="info">
-          <span className="flex items-center gap-2">
-            <WifiOff size={14} /> You&apos;re offline. Reconnecting…
-          </span>
-                </AlertBanner>
-            )}
+        <div className="mx-auto max-w-2xl space-y-5">
+            <div className={CARD}>
+                <h1 className="text-2xl font-bold text-ink">
+                    {greeting()}, {firstName}!
+                </h1>
+                <p className="text-sm text-slate">
+                    Your live queue status at {data.clinicName}. Updates every few seconds.
+                </p>
+                {offline && <p className="mt-2 text-sm text-warning">You&apos;re offline. Reconnecting…</p>}
+            </div>
 
-            <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-mist bg-white p-5 shadow-sm">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-ink">
-                        {greeting()}, {firstName}!
-                    </h1>
-                    <p className="text-sm text-slate">Your live queue status at {data.clinicName}. Updates every few seconds.</p>
-                </div>
-                {canCancel && (
-                    <Button variant="outline" disabled={busy || offline} className="rounded-full text-slate"
-                            onClick={() => {
-                                if (window.confirm("Cancel your place in the queue?")) void run(() => cancelMyPlace(token), "Your place was cancelled");
-                            }}>
-                        {entry?.status === "PENDING" ? "Cancel request" : "Leave the queue"}
-                    </Button>
-                )}
-            </section>
-
-            {/* Notes about the latest closed request */}
             {entry?.status === "REJECTED" && (
-                <AlertBanner variant="error">
-                    <p className="font-semibold">Your request wasn&apos;t accepted</p>
-                    <p>{entry.rejectionReason}</p>
-                </AlertBanner>
-            )}
-            {entry?.status === "DONE" && (
-                <AlertBanner variant="success">Your visit is complete. Thank you for coming!</AlertBanner>
-            )}
-            {entry?.status === "SKIPPED" && (
-                <AlertBanner variant="info">You were marked as a no-show. You can request to join again below.</AlertBanner>
-            )}
-            {entry?.status === "CANCELLED" && (
-                <AlertBanner variant="info">Your place was cancelled. You can request to join again below.</AlertBanner>
+                <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4 text-sm text-ink">
+                    <p className="font-semibold">Your last request wasn&apos;t accepted</p>
+                    {entry.rejectionReason && <p className="mt-1 text-slate">{entry.rejectionReason}</p>}
+                </div>
             )}
 
-            {/* Not in the queue: ask to join */}
-            {!active && (
-                <section className="rounded-2xl border border-mist bg-white p-6 shadow-sm">
-                    <h2 className="text-xl font-bold text-ink">Join the queue</h2>
-                    <p className="mt-1 text-sm text-slate">
+            {entry?.status === "DONE" && (
+                <div className="rounded-2xl border border-success/30 bg-success/10 p-4 text-sm text-ink">
+                    Your visit is complete. Thank you for your patience!
+                </div>
+            )}
+
+            {canJoin && (
+                <section className={CARD}>
+                    <h2 className="text-lg font-bold text-ink">Join the queue</h2>
+                    <p className="text-sm text-slate">
                         Send a request and {data.clinicName} will confirm your place.
                     </p>
-                    <div className="mt-4 space-y-4">
-                        <div>
-                            <p className="mb-2 text-sm font-semibold text-ink">Reason for your visit</p>
-                            <VisitTypePicker value={visitType} onChange={setVisitType} />
-                        </div>
-                        <div className="max-w-sm">
-                            <SubmitButton
-                                type="button"
-                                loading={busy}
-                                disabled={offline}
-                                onClick={() => void run(() => requestToJoin(token, visitType), "Request sent")}
-                            >
-                                Request to join the queue
-                            </SubmitButton>
-                        </div>
+                    <p className="mt-4 text-sm font-semibold text-ink">Choose a doctor</p>
+                    <div className="mt-2">
+                        <DoctorPicker doctors={data.doctors} value={doctorId} onChange={setDoctorId} disabled={lock} />
                     </div>
-                </section>
-            )}
-
-            {/* Request sent, waiting for the clinic */}
-            {entry?.status === "PENDING" && (
-                <section className="flex items-start gap-4 rounded-2xl border border-brand bg-brand-tint/50 p-6">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-brand">
-            <Hourglass size={22} />
-          </span>
-                    <div>
-                        <h2 className="text-xl font-bold text-ink">Request sent</h2>
-                        <p className="mt-1 text-slate">
-                            We&apos;re waiting for {data.clinicName} to confirm your place. You&apos;ll see an update here as soon
-                            as they respond.
-                        </p>
-                    </div>
-                </section>
-            )}
-
-            {/* In the queue */}
-            {entry?.status === "WAITING" && (
-                <section className="grid gap-4 md:grid-cols-3">
-                    <BigCard
-                        label="Your queue position"
-                        foot={
-                            <>
-                                <StatusPill tone={entry.displayStatus === "NEXT" ? "brand" : "soft"}>
-                                    {entry.displayStatus === "NEXT" ? "Next in line" : `Number ${entry.position} in line`}
-                                </StatusPill>
-                            </>
-                        }
+                    <button
+                        type="button"
+                        disabled={lock}
+                        onClick={() => act(() => requestToJoin(token, doctorId), "Request sent")}
+                        className={`mt-5 w-full rounded-full py-3 font-semibold shadow-md disabled:opacity-60 ${GRADIENT}`}
                     >
-                        <p className="text-5xl font-extrabold text-brand">#{entry.ticketNumber}</p>
-                    </BigCard>
-
-                    <BigCard label="Now serving">
-                        <p className="text-5xl font-extrabold text-ink">
-                            {data.nowServingTicket ? `#${data.nowServingTicket}` : "–"}
-                        </p>
-                    </BigCard>
-
-                    <BigCard label="Estimated wait" foot={<>Average consult: {data.avgConsultMinutes} min</>}>
-                        <p className="text-5xl font-extrabold text-ink">
-                            ~{entry.estimatedWaitMinutes ?? 0}
-                            <span className="ml-1 text-lg font-medium text-slate">mins</span>
-                        </p>
-                    </BigCard>
+                        {busy ? "Sending…" : "Request to join the queue"}
+                    </button>
                 </section>
             )}
 
-            {/* It's your turn */}
+            {entry?.status === "PENDING" && (
+                <section className={CARD}>
+                    <h2 className="text-lg font-bold text-ink">Request sent</h2>
+                    <p className="text-sm text-slate">
+                        {data.clinicName} will confirm your place shortly. You&apos;ll get a message here
+                        {WA_NUMBER ? " and on WhatsApp" : ""} as soon as they do.
+                    </p>
+                    {entry.preferredDoctorName && (
+                        <p className="mt-2 text-sm text-ink">Requested: {doctorLabel(entry.preferredDoctorName)}</p>
+                    )}
+                    <button
+                        type="button"
+                        disabled={lock}
+                        onClick={() => act(() => cancelMyPlace(token), "Request cancelled")}
+                        className="mt-4 rounded-full border border-mist px-4 py-2 text-sm font-medium text-ink hover:bg-cloud disabled:opacity-60"
+                    >
+                        Cancel request
+                    </button>
+                </section>
+            )}
+
+            {entry?.status === "WAITING" && (
+                <section className={CARD}>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                        <Stat label="Your position" value={String(entry.position)} sub={`Ticket #${entry.ticketNumber ?? "–"}`} />
+                        <Stat
+                            label="Now serving"
+                            value={data.nowServingTicket ? `#${data.nowServingTicket}` : "–"}
+                            sub={`${data.waitingCount} waiting`}
+                        />
+                        <Stat
+                            label="Estimated wait"
+                            value={entry.estimatedWaitMinutes <= 0 ? "Any moment" : `~${entry.estimatedWaitMinutes} min`}
+                            sub="Based on today"
+                        />
+                    </div>
+                    <p className="mt-4 text-sm text-ink">
+                        Your doctor: <span className="font-semibold">{doctorLabel(entry.doctorName)}</span>
+                    </p>
+                    {entry.displayStatus === "NEXT" && (
+                        <p className="mt-2 rounded-xl bg-brand-tint p-3 text-sm font-medium text-brand">
+                            You&apos;re next. Please be ready.
+                        </p>
+                    )}
+                    {(entry.displayStatus === "NOTIFIED" || entry.displayStatus === "LATE") && (
+                        <p className="mt-2 rounded-xl bg-warning/10 p-3 text-sm font-medium text-ink">
+                            The front desk is asking for you. Please come to the desk.
+                        </p>
+                    )}
+                    <button
+                        type="button"
+                        disabled={lock}
+                        onClick={() => {
+                            if (window.confirm("Leave the queue?")) void act(() => cancelMyPlace(token), "You left the queue");
+                        }}
+                        className="mt-4 rounded-full border border-mist px-4 py-2 text-sm font-medium text-ink hover:bg-cloud disabled:opacity-60"
+                    >
+                        Leave the queue
+                    </button>
+                </section>
+            )}
+
             {entry?.status === "SERVING" && (
-                <section className={cn(gradientButton, "flex items-center gap-5 rounded-2xl p-6")}>
-                    <PartyPopper size={36} />
-                    <div>
-                        <h2 className="text-2xl font-bold">It&apos;s your turn!</h2>
-                        <p className="opacity-90">Please go in to see the doctor. Your ticket is #{entry.ticketNumber}.</p>
+                <section className="rounded-2xl border border-success/30 bg-success/10 p-5">
+                    <h2 className="text-lg font-bold text-ink">It&apos;s your turn!</h2>
+                    <p className="text-sm text-slate">Please go to {doctorLabel(entry.doctorName)} now.</p>
+                </section>
+            )}
+
+            {!canJoin && data.doctors.length > 0 && (
+                <section className={CARD}>
+                    <h2 className="mb-3 text-sm font-semibold text-ink">Doctors today</h2>
+                    <DoctorPicker doctors={data.doctors} value={entry?.doctorId ?? null} readOnly />
+                </section>
+            )}
+
+            {waLink && (
+                <section className={CARD}>
+                    <div className="flex items-start gap-3">
+                        <MessageCircle className="mt-0.5 shrink-0 text-success" size={20} />
+                        <div className="min-w-0 flex-1">
+                            <h2 className="text-sm font-semibold text-ink">Get updates on WhatsApp</h2>
+                            <p className="text-sm text-slate">
+                                Tap the button and send the pre-filled message once. After that we&apos;ll message you when you&apos;re
+                                next and when it&apos;s your turn.
+                            </p>
+                            <a
+                                href={waLink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mt-3 inline-block rounded-full bg-success px-4 py-2 text-sm font-semibold text-white"
+                            >
+                                Turn on WhatsApp updates
+                            </a>
+                        </div>
                     </div>
                 </section>
             )}
 
-            {/* Updates */}
-            <section className="rounded-2xl border border-mist bg-white p-5 shadow-sm">
-                <h2 className="font-bold text-ink">Updates</h2>
+            <section className={CARD}>
+                <h2 className="text-sm font-semibold text-ink">Updates</h2>
                 {data.updates.length === 0 ? (
-                    <p className="mt-3 text-sm text-slate">No updates yet. They&apos;ll appear here as things happen.</p>
+                    <p className="mt-2 text-sm text-slate">No updates yet. They&apos;ll appear here as things happen.</p>
                 ) : (
-                    <ul className="mt-3 divide-y divide-mist">
+                    <ul className="mt-3 space-y-3">
                         {data.updates.map((u) => (
-                            <li key={u.id} className="flex items-start justify-between gap-4 py-3 text-sm">
-                                <span className="text-ink">{u.message}</span>
-                                <span className="shrink-0 text-xs text-slate">{timeAgo(u.createdAt)}</span>
+                            <li key={u.id} className="text-sm">
+                                <p className="text-ink">{u.message}</p>
+                                <p className="text-xs text-slate">{relTime(u.createdAt)}</p>
                             </li>
                         ))}
                     </ul>
                 )}
             </section>
+        </div>
+    );
+}
+
+function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
+    return (
+        <div className="rounded-xl bg-cloud p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate">{label}</p>
+            <p className="mt-1 text-2xl font-bold text-ink">{value}</p>
+            <p className="text-xs text-slate">{sub}</p>
         </div>
     );
 }

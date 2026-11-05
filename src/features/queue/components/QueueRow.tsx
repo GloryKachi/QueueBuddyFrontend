@@ -1,63 +1,73 @@
-import { Clock } from "lucide-react";
-import { RowMenu, type MenuItem } from "@/components/shared/RowMenu";
-import { StatusPill, type PillTone } from "@/components/shared/StatusPill";
-import { cn } from "@/lib/utils";
-import { visitTypeLabel } from "../labels";
-import type { DisplayStatus, QueueItem } from "../types";
+"use client";
 
-const statusView: Partial<Record<DisplayStatus, { label: string; tone: PillTone }>> = {
-    NEXT: { label: "Next", tone: "brand" },
-    NOTIFIED: { label: "Notified", tone: "soft" },
-    LATE: { label: "Late", tone: "late" },
-    WAITING: { label: "Waiting", tone: "neutral" },
-    SERVING: { label: "Serving", tone: "brand" },
+import { doctorLabel } from "../doctor";
+import type { DoctorOption, QueueItem } from "../types";
+
+const PILL: Record<string, { label: string; className: string }> = {
+    NEXT: { label: "Next", className: "bg-brand-tint text-brand" },
+    NOTIFIED: { label: "Notified", className: "bg-warning/15 text-warning" },
+    LATE: { label: "Late", className: "bg-danger/10 text-danger" },
+    WAITING: { label: "Waiting", className: "bg-cloud text-slate" },
 };
+
+const BTN =
+    "rounded-full border border-mist px-3 py-1.5 text-sm font-medium text-ink hover:bg-cloud disabled:opacity-50";
 
 type Props = {
     item: QueueItem;
+    doctors: DoctorOption[];
+    canAssign: boolean;
     busy: boolean;
     onNotify: () => void;
     onSkip: () => void;
     onRemove: () => void;
+    onAssign: (doctorId: number) => void;
 };
 
-export function QueueRow({ item, busy, onNotify, onSkip, onRemove }: Props) {
-    const view = statusView[item.displayStatus] ?? { label: item.displayStatus, tone: "neutral" as PillTone };
-    const menu: MenuItem[] = [
-        { label: "Notify to come to desk", onSelect: onNotify },
-        { label: "Skip / no-show", onSelect: onSkip },
-        { label: "Remove from queue", onSelect: onRemove, danger: true },
-    ];
+export function QueueRow({ item, doctors, canAssign, busy, onNotify, onSkip, onRemove, onAssign }: Props) {
+    const pill = PILL[item.displayStatus] ?? PILL.WAITING;
 
     return (
-        <article
-            className={cn(
-                "flex items-center gap-3 rounded-2xl border bg-white p-3 shadow-sm sm:gap-4 sm:p-4",
-                item.displayStatus === "NEXT" ? "border-brand ring-1 ring-brand/20" : "border-mist"
-            )}
-        >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-tint font-bold text-brand">
-          {item.ticketNumber ?? "–"}
-      </span>
-            <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-ink">{item.patientName}</p>
-                <p className="text-xs text-slate">{item.maskedPhone ?? "No phone number"}</p>
-                <p className="mt-1 flex items-center gap-1 text-xs text-slate sm:hidden">
-                    <Clock size={12} /> Waiting {item.waitingMinutes} min
-                </p>
+        <article className="rounded-2xl border border-mist bg-white p-4">
+            <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-tint text-lg font-bold text-brand">
+                    {item.ticketNumber ?? "–"}
+                </div>
+                <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="truncate font-semibold text-ink">{item.patientName}</h3>
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${pill.className}`}>
+              {pill.label}
+            </span>
+                    </div>
+                    <p className="text-sm text-slate">
+                        {item.maskedPhone} · waiting {item.waitingMinutes} min
+                        {item.doctorName ? ` · ${doctorLabel(item.doctorName)}` : ""}
+                    </p>
+                </div>
             </div>
 
-            <div className="hidden items-center gap-3 sm:flex">
-        <span className="rounded-full bg-cloud px-3 py-1 text-xs font-semibold text-slate">
-          {visitTypeLabel[item.visitType]}
-        </span>
-                <span className="flex items-center gap-1 whitespace-nowrap text-sm text-slate">
-          <Clock size={14} /> Waiting {item.waitingMinutes} min
-        </span>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+                {canAssign && doctors.length > 1 && (
+                    <select
+                        aria-label={`Doctor for ${item.patientName}`}
+                        value={item.doctorId ?? ""}
+                        disabled={busy}
+                        onChange={(e) => onAssign(Number(e.target.value))}
+                        className="rounded-lg border border-mist bg-white px-3 py-1.5 text-sm text-ink"
+                    >
+                        {item.doctorId === null && <option value="">Assign a doctor…</option>}
+                        {doctors.map((d) => (
+                            <option key={d.id} value={d.id}>
+                                {doctorLabel(d.name)}
+                            </option>
+                        ))}
+                    </select>
+                )}
+                <button type="button" className={BTN} disabled={busy} onClick={onNotify}>Notify</button>
+                <button type="button" className={BTN} disabled={busy} onClick={onSkip}>No-show</button>
+                <button type="button" className={BTN} disabled={busy} onClick={onRemove}>Remove</button>
             </div>
-
-            <StatusPill tone={view.tone}>{view.label}</StatusPill>
-            <RowMenu items={menu} disabled={busy} />
         </article>
     );
 }

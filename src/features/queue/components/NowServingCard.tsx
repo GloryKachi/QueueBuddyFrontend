@@ -1,7 +1,7 @@
 import { Check, Megaphone, UserX } from "lucide-react";
 import { LiveTimer } from "@/components/shared/LiveTimer";
 import { Button } from "@/components/ui/button";
-import { visitTypeLabel } from "../labels";
+// import { visitTypeLabel } from "../labels";
 import type { QueueItem } from "../types";
 
 type Props = { item: QueueItem; busy: boolean; onDone: () => void; onSkip: () => void };
@@ -21,9 +21,9 @@ export function NowServingCard({ item, busy, onDone, onSkip }: Props) {
             <div className="mt-4 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                     <h3 className="text-2xl font-bold leading-tight text-ink">{item.patientName}</h3>
-                    <span className="mt-2 inline-block rounded-full bg-cloud px-3 py-1 text-xs font-semibold text-slate">
-            {visitTypeLabel[item.visitType]}
-          </span>
+          {/*          <span className="mt-2 inline-block rounded-full bg-cloud px-3 py-1 text-xs font-semibold text-slate">*/}
+          {/*  {visitTypeLabel[item.visitType]}*/}
+          {/*</span>*/}
                     <p className="mt-3 text-xs text-slate">
                         {item.maskedPhone ?? "No phone number"}
                         {item.servedByName && ` · ${item.servedByName}`}
